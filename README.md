@@ -36,6 +36,7 @@ npm install
 Create a `.env.local` file in the root directory:
 ```
 BARCODE_API_KEY=your_api_key_here
+AUTH_PASSWORD=chicago123
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
 ```
 
@@ -93,6 +94,7 @@ In the Vercel dashboard:
 2. Navigate to "Environment Variables"
 3. Add the following variables:
    - `BARCODE_API_KEY`: Your Barcode Lookup API key
+   - `AUTH_PASSWORD`: Your login password (e.g., chicago123)
    - `NEXT_PUBLIC_API_BASE_URL`: Your production URL (e.g., https://your-app.vercel.app)
 
 ### Step 4: Redeploy

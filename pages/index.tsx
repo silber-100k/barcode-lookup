@@ -30,12 +30,33 @@ interface ApiLimits {
 }
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
   const [csvData, setCsvData] = useState<EnhancedCSVRow[]>([])
   const [originalHeaders, setOriginalHeaders] = useState<string[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [apiLimits, setApiLimits] = useState<ApiLimits | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordError('')
+    
+    try {
+      const response = await axios.post('/api/auth', { password })
+      
+      if (response.data.success) {
+        setIsAuthenticated(true)
+        setPassword('')
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || 'Authentication failed'
+      setPasswordError(errorMessage)
+      setPassword('')
+    }
+  }
 
   const handleFileUpload = useCallback((file: File) => {
     if (!file.name.endsWith('.csv')) {
@@ -157,6 +178,45 @@ export default function Home() {
     alert('Barcode lookup completed!')
   }
 
+  const downloadEnhancedExcel = async () => {
+    if (csvData.length === 0) {
+      alert('No data to download')
+      return
+    }
+
+    try {
+      setIsProcessing(true)
+      
+      const response = await axios.post('/api/generate-excel', {
+        data: csvData,
+        headers: originalHeaders
+      }, {
+        responseType: 'blob',
+        timeout: 60000 // 60 seconds for image downloads
+      })
+
+      // Create download link
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `enhanced_products_${Date.now()}.xlsx`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      alert('Excel file with embedded images downloaded successfully!')
+    } catch (error) {
+      console.error('Excel download error:', error)
+      alert('Failed to generate Excel file. Please try again.')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   const downloadEnhancedCSV = () => {
     if (csvData.length === 0) {
       alert('No data to download')
@@ -208,6 +268,49 @@ export default function Home() {
       default:
         return <span className="status-badge status-pending">Pending</span>
     }
+  }
+
+  // Show login form if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="container">
+        <Head>
+          <title>Login - Barcode Lookup Tool</title>
+          <meta name="description" content="Secure access to barcode lookup tool" />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
+
+        <main>
+          <div className="login-container">
+            <div className="login-form">
+              <h1>🔒 Secure Access Required</h1>
+              <p>Please enter the password to access the Barcode Lookup Tool</p>
+              
+              <form onSubmit={handleLogin}>
+                <div className="form-group">
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    className="password-input"
+                    autoFocus
+                  />
+                </div>
+                
+                {passwordError && (
+                  <div className="error-message">{passwordError}</div>
+                )}
+                
+                <button type="submit" className="btn btn-primary login-btn">
+                  Access Application
+                </button>
+              </form>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -277,18 +380,27 @@ export default function Home() {
             
             <button
               className="btn btn-success"
+              onClick={downloadEnhancedExcel}
+              disabled={isProcessing}
+            >
+              📊 Download Excel with Images
+            </button>
+            
+            <button
+              className="btn btn-secondary"
               onClick={downloadEnhancedCSV}
               disabled={isProcessing}
             >
-              Download Enhanced CSV
+              📄 Download CSV (Links Only)
             </button>
 
             <button
               className="btn btn-secondary"
               onClick={fetchApiLimits}
               disabled={isProcessing}
+              style={{ marginLeft: '10px' }}
             >
-              Check API Limits
+              🔍 Check API Limits
             </button>
           </div>
         )}
@@ -329,14 +441,22 @@ export default function Home() {
                       {row.ProductImage ? (
                         <img 
                           src={row.ProductImage} 
-                          alt="Product" 
+                          alt={row.ProductTitle || 'Product'} 
                           className="product-image"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none'
+                            const target = e.target as HTMLImageElement
+                            target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjZjBmMGYwIi8+CjxwYXRoIGQ9Ik0yNSAxNUMyMC4wMyAxNSAxNiAxOS4wMyAxNiAyNEMxNiAyOC45NyAyMC4wMyAzMyAyNSAzM0MyOS45NyAzMyAzNCAyOC45NyAzNCAyNEMzNCAyMC42IDMyIDEwIDI1IDE1WiIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4K'
+                            target.alt = 'No image'
+                          }}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => {
+                            if (row.ProductImage) {
+                              window.open(row.ProductImage, '_blank')
+                            }
                           }}
                         />
                       ) : (
-                        '-'
+                        <div className="no-image">No Image</div>
                       )}
                     </td>
                     <td>{row.RetailPrice || '-'}</td>
