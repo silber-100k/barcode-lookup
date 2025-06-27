@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import ExcelJS from 'exceljs'
 import axios from 'axios'
-import sharp from 'sharp'
+import Jimp from 'jimp'
 
 interface ExcelDataRow {
   [key: string]: string | undefined
@@ -102,27 +102,24 @@ export default async function handler(
           if (originalBuffer.length > maxSizeKB * 1024) {
             console.log(`Image too large, processing...`)
             
-            // First attempt: resize with high quality
-            imageBuffer = await sharp(imageResponse.data)
-              .resize(120, 80, { fit: 'inside', withoutEnlargement: true })
-              .jpeg({ quality: 95, progressive: true })
-              .toBuffer()
+            // First attempt: resize with high quality using Jimp
+            const image = await Jimp.read(imageResponse.data)
+            image.resize(120, 80).quality(95)
+            imageBuffer = await image.getBufferAsync(Jimp.MIME_JPEG)
 
             // If still too large, compress more
             if (imageBuffer.length > maxSizeKB * 1024) {
               console.log(`Still too large (${Math.round(imageBuffer.length/1024)}KB), compressing further...`)
-              imageBuffer = await sharp(imageResponse.data)
-                .resize(120, 80, { fit: 'inside', withoutEnlargement: true })
-                .jpeg({ quality: 70, progressive: true })
-                .toBuffer()
+              const image2 = await Jimp.read(imageResponse.data)
+              image2.resize(120, 80).quality(70)
+              imageBuffer = await image2.getBufferAsync(Jimp.MIME_JPEG)
               
               // Final attempt: aggressive compression
               if (imageBuffer.length > maxSizeKB * 1024) {
                 console.log(`Still too large (${Math.round(imageBuffer.length/1024)}KB), final compression...`)
-                imageBuffer = await sharp(imageResponse.data)
-                  .resize(100, 67, { fit: 'inside', withoutEnlargement: true })
-                  .jpeg({ quality: 50, progressive: true })
-                  .toBuffer()
+                const image3 = await Jimp.read(imageResponse.data)
+                image3.resize(100, 67).quality(50)
+                imageBuffer = await image3.getBufferAsync(Jimp.MIME_JPEG)
               }
             }
           } else {
