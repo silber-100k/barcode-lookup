@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import ExcelJS from 'exceljs'
 import axios from 'axios'
+import sharp from 'sharp'
 
 interface ExcelDataRow {
   [key: string]: string | undefined
@@ -74,7 +75,7 @@ export default async function handler(
 
       // Set row height for images
       const excelRow = worksheet.getRow(rowIndex)
-      excelRow.height = 60 // Height for images
+      excelRow.height = 90 // Height for images
 
       // Add image if available
       if (row.ProductImage && row.ProductImage !== '') {
@@ -90,29 +91,61 @@ export default async function handler(
             }
           })
 
-          // Get image extension from URL or content type
-          let imageExtension: 'jpeg' | 'png' | 'gif' = 'jpeg'
-          const contentType = imageResponse.headers['content-type']
-          if (contentType?.includes('png')) imageExtension = 'png'
-          else if (contentType?.includes('gif')) imageExtension = 'gif'
-          else if (contentType?.includes('webp')) imageExtension = 'jpeg' // Use jpeg for webp
-          else if (contentType?.includes('jpg') || contentType?.includes('jpeg')) imageExtension = 'jpeg'
+          // Check original image size first
+          const maxSizeKB = 10
+          const originalBuffer = Buffer.from(imageResponse.data)
+          let imageBuffer = originalBuffer
+          
+          console.log(`Original image size: ${Math.round(originalBuffer.length/1024)}KB`)
+          
+          // Only process if original image is too large
+          if (originalBuffer.length > maxSizeKB * 1024) {
+            console.log(`Image too large, processing...`)
+            
+            // First attempt: resize with high quality
+            imageBuffer = await sharp(imageResponse.data)
+              .resize(120, 80, { fit: 'inside', withoutEnlargement: true })
+              .jpeg({ quality: 95, progressive: true })
+              .toBuffer()
 
-          // Add image to workbook
+            // If still too large, compress more
+            if (imageBuffer.length > maxSizeKB * 1024) {
+              console.log(`Still too large (${Math.round(imageBuffer.length/1024)}KB), compressing further...`)
+              imageBuffer = await sharp(imageResponse.data)
+                .resize(120, 80, { fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 70, progressive: true })
+                .toBuffer()
+              
+              // Final attempt: aggressive compression
+              if (imageBuffer.length > maxSizeKB * 1024) {
+                console.log(`Still too large (${Math.round(imageBuffer.length/1024)}KB), final compression...`)
+                imageBuffer = await sharp(imageResponse.data)
+                  .resize(100, 67, { fit: 'inside', withoutEnlargement: true })
+                  .jpeg({ quality: 50, progressive: true })
+                  .toBuffer()
+              }
+            }
+          } else {
+            console.log(`Using original image (small enough)`)
+          }
+          
+          console.log(`Final image size: ${Math.round(imageBuffer.length/1024)}KB`)
+
+          // Add compressed image to workbook
           const imageId = workbook.addImage({
-            buffer: imageResponse.data,
-            extension: imageExtension
+            buffer: imageBuffer,
+            extension: 'jpeg'
           })
 
           // Find the ProductImage column index
           const imageColumnIndex = headers.length + 1 // ProductImage is first additional column
 
-          // Add image to cell
-          worksheet.addImage(imageId, {
-            tl: { col: imageColumnIndex - 1 + 0.1, row: rowIndex - 1 + 0.1 },
-            ext: { width: 80, height: 50 },
-            editAs: 'oneCell'
-          })
+                      // Add image to cell
+            worksheet.addImage(imageId, {
+              tl: { col: imageColumnIndex - 1 + 0.1, row: rowIndex - 1 + 0.1 },
+              ext: { width: 120, height: 80 },
+              editAs: 'oneCell'
+            })
 
         } catch (imageError) {
           console.error(`Failed to download image for row ${i + 1}:`, imageError)
