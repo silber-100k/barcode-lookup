@@ -91,16 +91,17 @@ export default async function handler(
           })
 
           // Get image extension from URL or content type
-          let imageExtension = 'jpg'
+          let imageExtension: 'jpeg' | 'png' | 'gif' = 'jpeg'
           const contentType = imageResponse.headers['content-type']
           if (contentType?.includes('png')) imageExtension = 'png'
           else if (contentType?.includes('gif')) imageExtension = 'gif'
-          else if (contentType?.includes('webp')) imageExtension = 'webp'
+          else if (contentType?.includes('webp')) imageExtension = 'jpeg' // Use jpeg for webp
+          else if (contentType?.includes('jpg') || contentType?.includes('jpeg')) imageExtension = 'jpeg'
 
           // Add image to workbook
           const imageId = workbook.addImage({
             buffer: imageResponse.data,
-            extension: imageExtension as 'jpeg' | 'png' | 'gif'
+            extension: imageExtension
           })
 
           // Find the ProductImage column index
@@ -108,8 +109,8 @@ export default async function handler(
 
           // Add image to cell
           worksheet.addImage(imageId, {
-            tl: { col: imageColumnIndex - 1, row: rowIndex - 1 }, // Top-left position
-            br: { col: imageColumnIndex, row: rowIndex }, // Bottom-right position
+            tl: { col: imageColumnIndex - 1 + 0.1, row: rowIndex - 1 + 0.1 },
+            ext: { width: 80, height: 50 },
             editAs: 'oneCell'
           })
 
@@ -149,7 +150,6 @@ export default async function handler(
     // Set response headers for Excel download
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename="enhanced_products_${Date.now()}.xlsx"`)
-    res.setHeader('Content-Length', buffer.length)
 
     // Send the Excel file
     res.status(200).send(buffer)
