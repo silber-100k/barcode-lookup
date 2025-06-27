@@ -10,6 +10,15 @@ const nextConfig = {
       sizeLimit: '10mb',
     },
   },
+  experimental: {
+    serverComponentsExternalPackages: ['sharp'],
+  },
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals.push('sharp')
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig 
