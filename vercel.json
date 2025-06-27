@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "pages/api/**/*.ts": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "env": {
+    "BARCODE_API_KEY": "@barcode-api-key"
+  }
+} 
